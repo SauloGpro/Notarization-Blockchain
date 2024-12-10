@@ -1,13 +1,15 @@
 package com.example.NotarizationBlockchain.controller;
 
-import com.example.NotarizationBlockchain.model.Block;
+import com.example.NotarizationBlockchain.mapper.AppMapper;
+import com.example.NotarizationBlockchain.controller.dto.request.AddDocumentRequestDTO;
+import com.example.NotarizationBlockchain.controller.dto.response.BlockResponseDTO;
+import com.example.NotarizationBlockchain.controller.dto.response.BlockchainSummaryDTO;
 import com.example.NotarizationBlockchain.service.BlockchainService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/blockchain")
@@ -16,20 +18,28 @@ public class BlockchainController {
     @Autowired
     private BlockchainService blockchainService;
 
+    @Autowired
+    private AppMapper appMapper;
+
     // Endpoint para añadir un documento al blockchain
     @PostMapping("/add")
-    public ResponseEntity<?> addDocument(@RequestBody Map<String, String> request) {
+    public ResponseEntity<?> addDocument(@RequestBody AddDocumentRequestDTO requestDTO) {
         try {
-            String data = request.get("data");
-            String documentType = request.get("documentType");
-            String owner = request.get("owner");
-
-            Block block = blockchainService.addDocument(data, documentType, owner);
-            return ResponseEntity.status(201).body(block); // Devuelve el bloque registrado
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(400).body(e.getMessage());
+            var block = blockchainService.addDocument(
+                    requestDTO.getData(),
+                    requestDTO.getDocumentType(),
+                    requestDTO.getOwner()
+            );
+            return ResponseEntity.status(201).body(appMapper.blockToBlockResponseDTO(block));
+        } catch (IllegalArgumentException ex) {
+            // Manejo de errores específicos
+            return ResponseEntity.badRequest().body(ex.getMessage());
+        } catch (Exception ex) {
+            // Manejo de errores generales
+            return ResponseEntity.status(500).body("Error al añadir el documento al blockchain");
         }
     }
+
 
     // Endpoint para validar toda la cadena de bloques
     @GetMapping("/validate")
@@ -39,45 +49,51 @@ public class BlockchainController {
 
     // Endpoint para obtener toda la blockchain
     @GetMapping("/chain")
-    public ResponseEntity<List<Block>> getBlockchain() {
-        return ResponseEntity.ok(blockchainService.getBlockchain());
+    public ResponseEntity<List<BlockResponseDTO>> getBlockchain() {
+        var blocks = blockchainService.getBlockchain();
+        return ResponseEntity.ok(appMapper.blocksToBlockResponseDTOs(blocks)); // Mapeo a DTOs
     }
 
     // Endpoint para buscar un documento específico por su hash
     @GetMapping("/search/{hash}")
-    public ResponseEntity<?> searchDocument(@PathVariable String hash) {
-        Block block = blockchainService.searchBlockByHash(hash);
-        if (block != null) {
-            return ResponseEntity.ok(block);
+    public ResponseEntity<BlockResponseDTO> searchDocument(@PathVariable String hash) {
+        var block = blockchainService.searchBlockByHash(hash);
+        if (block == null) {
+            return ResponseEntity.status(404).build();
         }
-        return ResponseEntity.status(404).body("Documento no encontrado");
+        return ResponseEntity.ok(appMapper.blockToBlockResponseDTO(block)); // Mapeo a DTO
     }
 
     // Endpoint para obtener un resumen del blockchain
     @GetMapping("/summary")
-    public ResponseEntity<?> getBlockchainSummary() {
-        int totalBlocks = blockchainService.getBlockchain().size();
-        Block genesisBlock = blockchainService.getBlockchain().get(0);
-        Block latestBlock = blockchainService.getBlockchain().get(totalBlocks - 1);
+    public ResponseEntity<BlockchainSummaryDTO> getBlockchainSummary() {
+        var blocks = blockchainService.getBlockchain();
+        var totalBlocks = blocks.size();
+        var genesisTimestamp = blocks.get(0).getTimestamp();
+        var latestTimestamp = blocks.get(totalBlocks - 1).getTimestamp();
+        var isChainValid = blockchainService.validateBlockchain();
 
-        return ResponseEntity.ok(Map.of(
-                "totalBlocks", totalBlocks,
-                "genesisTimestamp", genesisBlock.getTimestamp(),
-                "latestTimestamp", latestBlock.getTimestamp(),
-                "isChainValid", blockchainService.validateBlockchain()
-        ));
+        var summary = BlockchainSummaryDTO.builder()
+                .totalBlocks(totalBlocks)
+                .genesisTimestamp(genesisTimestamp)
+                .latestTimestamp(latestTimestamp)
+                .isChainValid(isChainValid)
+                .build();
+
+        return ResponseEntity.ok(summary);
     }
 
-    // Nuevo Endpoint: Obtener bloques por propietario
+    // Endpoint para obtener bloques por propietario
     @GetMapping("/owner/{owner}")
-    public ResponseEntity<List<Block>> getBlocksByOwner(@PathVariable String owner) {
-        List<Block> blocks = blockchainService.getBlocksByOwner(owner);
+    public ResponseEntity<List<BlockResponseDTO>> getBlocksByOwner(@PathVariable String owner) {
+        var blocks = blockchainService.getBlocksByOwner(owner);
         if (blocks.isEmpty()) {
-            return ResponseEntity.status(404).body(null);
+            return ResponseEntity.status(404).build();
         }
-        return ResponseEntity.ok(blocks);
+        return ResponseEntity.ok(appMapper.blocksToBlockResponseDTOs(blocks)); // Mapeo a DTOs
     }
 }
+
 
 
 

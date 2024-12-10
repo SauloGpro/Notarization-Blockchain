@@ -1,6 +1,6 @@
 package com.example.NotarizationBlockchain.config;
 
-import com.example.NotarizationBlockchain.service.JwtService;
+import com.example.NotarizationBlockchain.service.impl.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

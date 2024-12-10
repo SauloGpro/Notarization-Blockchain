@@ -1,7 +1,7 @@
 package com.example.NotarizationBlockchain.config;
 
-import com.example.NotarizationBlockchain.service.JwtService;
-import com.example.NotarizationBlockchain.service.UserService;
+import com.example.NotarizationBlockchain.service.impl.JwtService;
+import com.example.NotarizationBlockchain.service.impl.UserServiceImpl;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -10,6 +10,7 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 
 import java.util.Arrays;
@@ -18,10 +19,10 @@ import java.util.Arrays;
 public class SecurityConfig {
 
     private final JwtService jwtService;
-    private final UserService userService;
-    private final PasswordEncoder passwordEncoder; // Inyectado desde BeanConfig
+    private final UserServiceImpl userService;
+    private final PasswordEncoder passwordEncoder;
 
-    public SecurityConfig(JwtService jwtService, UserService userService, PasswordEncoder passwordEncoder) {
+    public SecurityConfig(JwtService jwtService, UserServiceImpl userService, PasswordEncoder passwordEncoder) {
         this.jwtService = jwtService;
         this.userService = userService;
         this.passwordEncoder = passwordEncoder;
@@ -30,21 +31,24 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
+                // Configuración de CORS
                 .cors(cors -> cors.configurationSource(request -> {
                     CorsConfiguration configuration = new CorsConfiguration();
-                    configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000"));
+                    configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000")); // Cambia al origen de tu frontend
                     configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
                     configuration.setAllowedHeaders(Arrays.asList("*"));
                     configuration.setAllowCredentials(true);
                     return configuration;
                 }))
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf.disable()) // Desactiva CSRF para simplificar (activarlo en producción)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/auth/login").permitAll() // Permitir ambos patrones
+                        // Define los endpoints que no requieren autenticación
+                        .requestMatchers("/auth/register", "/auth/login").permitAll()
+                        // Todas las demás rutas requieren autenticación
                         .anyRequest().authenticated()
                 )
-
-                .addFilterBefore(jwtAuthorizationFilter(), org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
+                // Agrega el filtro JWT antes de que Spring valide las credenciales
+                .addFilterBefore(jwtAuthorizationFilter(), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -52,8 +56,8 @@ public class SecurityConfig {
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
-        authProvider.setUserDetailsService(userService);
-        authProvider.setPasswordEncoder(passwordEncoder); // Usamos el PasswordEncoder inyectado
+        authProvider.setUserDetailsService(userService); // Configura el UserDetailsService
+        authProvider.setPasswordEncoder(passwordEncoder); // Configura el encoder para contraseñas
         return authProvider;
     }
 
@@ -67,6 +71,7 @@ public class SecurityConfig {
         return new JwtAuthorizationFilter(jwtService, userService);
     }
 }
+
 
 
 
